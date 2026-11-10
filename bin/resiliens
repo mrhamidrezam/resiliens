@@ -1,0 +1,88 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../src/CircuitBreaker/CircuitState.php';
+require_once __DIR__ . '/../src/CircuitBreaker/CircuitBreakerException.php';
+require_once __DIR__ . '/../src/CircuitBreaker/StorageInterface.php';
+require_once __DIR__ . '/../src/CircuitBreaker/MemoryStorage.php';
+require_once __DIR__ . '/../src/CircuitBreaker/FileStorage.php';
+require_once __DIR__ . '/../src/CircuitBreaker/CircuitBreaker.php';
+require_once __DIR__ . '/../src/Retry/BackoffStrategy.php';
+require_once __DIR__ . '/../src/Retry/RetryPolicy.php';
+require_once __DIR__ . '/../src/RateLimiter/RateLimitExceededException.php';
+require_once __DIR__ . '/../src/RateLimiter/RateLimiter.php';
+require_once __DIR__ . '/../src/Bulkhead/BulkheadRejectedException.php';
+require_once __DIR__ . '/../src/Bulkhead/Bulkhead.php';
+require_once __DIR__ . '/../src/Pipeline/ResiliencePipeline.php';
+require_once __DIR__ . '/../src/Resiliens.php';
+
+use Resiliens\Resiliens;
+use Resiliens\CircuitBreaker\FileStorage;
+use Resiliens\CircuitBreaker\CircuitBreaker;
+
+$args = array_slice($argv, 1);
+$command = $args[0] ?? 'help';
+
+echo "\033[1;36mResiliens CLI\033[0m v" . Resiliens::VERSION . " - Zero-Dependency Resilience Engine\n";
+echo str_repeat('-', 55) . "\n";
+
+$storage = new FileStorage();
+
+switch ($command) {
+    case 'check':
+        $service = $args[1] ?? null;
+        if (!$service) {
+            echo "\033[31mError:\033[0m Please specify a service name: resiliens check <service>\n";
+            exit(1);
+        }
+        $cb = new CircuitBreaker($service, storage: $storage);
+        $state = $cb->getState();
+        $color = match ($state->value) {
+            'closed' => "\033[32m",
+            'open' => "\033[31m",
+            'half_open' => "\033[33m",
+        };
+        echo "Service: \033[1m{$service}\033[0m\n";
+        echo "State:   {$color}" . strtoupper($state->value) . "\033[0m\n";
+        echo "Failures: " . $storage->getFailureCount($service) . "\n";
+        if ($state->value === 'open') {
+            echo "Cooldown remaining: " . round($cb->getRemainingTimeout(), 1) . "s\n";
+        }
+        break;
+
+    case 'reset':
+        $service = $args[1] ?? null;
+        if (!$service) {
+            echo "\033[31mError:\033[0m Please specify a service name: resiliens reset <service>\n";
+            exit(1);
+        }
+        $cb = new CircuitBreaker($service, storage: $storage);
+        $cb->recordSuccess();
+        echo "\033[32m✔ Success:\033[0m Circuit for '{$service}' reset to CLOSED.\n";
+        break;
+
+    case 'benchmark':
+        echo "Running in-memory resilience throughput benchmark...\n";
+        $iterations = 50000;
+        $cb = Resiliens::circuit('bench_circuit', 100);
+        $start = microtime(true);
+        for ($i = 0; $i < $iterations; $i++) {
+            $cb->call(static fn() => 42);
+        }
+        $elapsed = microtime(true) - $start;
+        $opsPerSec = round($iterations / $elapsed);
+        echo "Completed {$iterations} circuit-guarded operations in " . round($elapsed * 1000, 2) . "ms\n";
+        echo "\033[1;32mThroughput: " . number_format($opsPerSec) . " ops/second\033[0m\n";
+        break;
+
+    case 'help':
+    default:
+        echo "Usage:\n";
+        echo "  resiliens check <service>   Inspect circuit breaker status for a service\n";
+        echo "  resiliens reset <service>   Reset circuit state to CLOSED\n";
+        echo "  resiliens benchmark         Run throughput and latency benchmark\n";
+        echo "  resiliens help              Show this help message\n";
+        break;
+}

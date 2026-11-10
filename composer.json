@@ -1,0 +1,39 @@
+{
+  "name": "mrhamidrezam/resiliens",
+  "description": "Zero-dependency fault-tolerance & resilience toolkit for PHP 8.2+: Circuit Breaker, Exponential Retry with Jitter, Bulkhead Semaphore, Rate Limiter, and Fallback chains.",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Hamidreza",
+      "homepage": "https://github.com/mrhamidrezam"
+    }
+  ],
+  "keywords": [
+    "resilience",
+    "circuit-breaker",
+    "retry",
+    "jitter",
+    "bulkhead",
+    "rate-limiter",
+    "fault-tolerance",
+    "zero-dependency"
+  ],
+  "require": {
+    "php": ">=8.2.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Resiliens\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Resiliens\\Tests\\": "tests/"
+    }
+  },
+  "bin": [
+    "bin/resiliens"
+  ],
+  "minimum-stability": "stable"
+}
